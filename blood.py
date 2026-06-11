@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 
 # ==================================
-# הגדרות עמוד
+# Page
 # ==================================
 st.set_page_config(
     page_title="Blood Drop Analyzer",
@@ -12,19 +12,37 @@ st.set_page_config(
 )
 
 st.title("🩸 Blood Drop Impact Angle")
-st.write("העלה תמונה והמערכת תזהה את טיפת הדם ותחשב זווית פגיעה.")
+
+st.write(
+    "העלה תמונה או צלם תמונה והמערכת תזהה את טיפת הדם ותחשב זווית פגיעה."
+)
 
 # ==================================
-# העלאת תמונה
+# Upload OR Camera
 # ==================================
 uploaded = st.file_uploader(
-    "בחר תמונה",
+    "Upload Image",
     type=["jpg", "jpeg", "png"]
 )
 
-if uploaded:
+captured = st.camera_input(
+    "Take Photo"
+)
 
-    image = Image.open(uploaded)
+image_source = None
+
+if captured is not None:
+    image_source = captured
+
+elif uploaded is not None:
+    image_source = uploaded
+
+# ==================================
+# Process
+# ==================================
+if image_source is not None:
+
+    image = Image.open(image_source)
 
     img = np.array(image)
 
@@ -48,19 +66,29 @@ if uploaded:
 
     original = img.copy()
 
-    # =========================
-    # HSV
-    # =========================
+    # ==========================
+    # HSV Detection
+    # ==========================
     hsv = cv2.cvtColor(
         img,
         cv2.COLOR_BGR2HSV
     )
 
-    lower1 = np.array([0, 50, 50])
-    upper1 = np.array([10, 255, 255])
+    lower1 = np.array(
+        [0, 50, 50]
+    )
 
-    lower2 = np.array([160, 50, 50])
-    upper2 = np.array([180, 255, 255])
+    upper1 = np.array(
+        [10, 255, 255]
+    )
+
+    lower2 = np.array(
+        [160, 50, 50]
+    )
+
+    upper2 = np.array(
+        [180, 255, 255]
+    )
 
     mask = (
         cv2.inRange(
@@ -76,9 +104,9 @@ if uploaded:
         )
     )
 
-    # =========================
-    # ניקוי רעש
-    # =========================
+    # ==========================
+    # Noise cleanup
+    # ==========================
     kernel = np.ones(
         (3, 3),
         np.uint8
@@ -103,9 +131,9 @@ if uploaded:
         iterations=2
     )
 
-    # =========================
-    # קונטורים
-    # =========================
+    # ==========================
+    # Contours
+    # ==========================
     contours, _ = cv2.findContours(
         mask,
         cv2.RETR_EXTERNAL,
@@ -132,12 +160,17 @@ if uploaded:
 
         circularity = (
             4
-            * np.pi
-            * area
-            / (perimeter ** 2)
+            *
+            np.pi
+            *
+            area
+            /
+            (perimeter ** 2)
         )
 
-        x, y, w, h = cv2.boundingRect(c)
+        x, y, w, h = cv2.boundingRect(
+            c
+        )
 
         aspect_ratio = (
             min(w, h)
@@ -145,27 +178,32 @@ if uploaded:
             max(w, h)
         )
 
-        compactness = (
-            circularity
-            * aspect_ratio
-        )
-
         score = (
             area
-            * compactness
+            *
+            circularity
+            *
+            aspect_ratio
         )
 
         if score > best_score:
             best_score = score
             best = c
 
+    # ==========================
+    # Result
+    # ==========================
     if best is None:
 
-        st.error("❌ לא נמצאה טיפת דם")
+        st.error(
+            "❌ No blood drop detected"
+        )
 
     elif len(best) < 5:
 
-        st.error("❌ אין מספיק נקודות להתאמת אליפסה")
+        st.error(
+            "❌ Not enough contour points"
+        )
 
     else:
 
@@ -173,21 +211,24 @@ if uploaded:
             best
         )
 
-        (x, y), (MA, ma), angle = ellipse
+        (
+            center,
+            axes,
+            angle
+        ) = ellipse
 
-        length = max(
-            MA,
-            ma
+        MA = max(
+            axes
         )
 
-        width = min(
-            MA,
-            ma
+        ma = min(
+            axes
         )
 
         ratio = (
-            width
-            / length
+            ma
+            /
+            MA
         )
 
         theta = np.degrees(
@@ -200,15 +241,18 @@ if uploaded:
             )
         )
 
-        # ציור אליפסה
         cv2.ellipse(
             original,
             ellipse,
-            (0, 255, 0),
+            (
+                0,
+                255,
+                0
+            ),
             4
         )
 
-        display = cv2.cvtColor(
+        output = cv2.cvtColor(
             original,
             cv2.COLOR_BGR2RGB
         )
@@ -218,8 +262,9 @@ if uploaded:
         )
 
         with c1:
+
             st.image(
-                display,
+                output,
                 caption="Detected Blood Drop",
                 use_container_width=True
             )
@@ -228,12 +273,12 @@ if uploaded:
 
             st.metric(
                 "Length",
-                f"{length:.1f}"
+                f"{MA:.1f}"
             )
 
             st.metric(
                 "Width",
-                f"{width:.1f}"
+                f"{ma:.1f}"
             )
 
             st.metric(
